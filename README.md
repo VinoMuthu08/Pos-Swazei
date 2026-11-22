@@ -1,4 +1,4 @@
-# Multi-Tenant POS API
+# Pos-Swazei - Multi-Tenant POS API
 
 Backend API built with NestJS, TypeScript, PostgreSQL, Prisma, and Redis.
 
