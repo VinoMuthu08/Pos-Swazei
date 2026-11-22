@@ -2,6 +2,15 @@
 
 Backend API built with NestJS, TypeScript, PostgreSQL, Prisma, and Redis.
 
+## Get the project
+
+In a terminal, run:
+
+```sh
+git clone https://github.com/VinoMuthu08/Pos-Swazei.git
+cd Pos-Swazei
+```
+
 ## Run locally
 
 1. Install Node.js, PostgreSQL, and Redis.
