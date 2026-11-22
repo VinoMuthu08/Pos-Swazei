@@ -1,0 +1,22 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { PaymentsService } from './payments.service';
+import { PAYMENT_PROVIDER } from '../common/interfaces/payment-provider.interface';
+
+describe('PaymentsService', () => {
+  let service: PaymentsService;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        PaymentsService,
+        { provide: PAYMENT_PROVIDER, useValue: { processPayment: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get<PaymentsService>(PaymentsService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});

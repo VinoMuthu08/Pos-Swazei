@@ -1,0 +1,236 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  PAYMENT_FAILED
+}
+
+enum PaymentStatus {
+  SUCCESS
+  FAILED
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  OTHER
+}
+
+model User {
+  id              String           @id @default(uuid())
+  name            String
+  email           String           @unique
+  passwordHash    String
+  isPlatformAdmin Boolean          @default(false)
+  status          RecordStatus     @default(ACTIVE)
+  memberships     UserMembership[]
+  sales           Sale[]           @relation("SaleCreator")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model Merchant {
+  id          String           @id @default(uuid())
+  name        String
+  status      RecordStatus     @default(ACTIVE)
+  stores      Store[]
+  memberships UserMembership[]
+  products    Product[]
+  inventory   StoreInventory[]
+  sales       Sale[]
+  saleItems   SaleItem[]
+  idempotency IdempotencyKey[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model Store {
+  id          String           @id @default(uuid())
+  name        String
+  address     String?
+  status      RecordStatus     @default(ACTIVE)
+  merchant    Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId  String
+  memberships UserMembership[]
+  inventory   StoreInventory[]
+  sales       Sale[]
+  idempotency IdempotencyKey[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([merchantId, status])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  memberships UserMembership[]
+  permissions Permission[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  roles     Role[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserMembership {
+  id           String       @id @default(uuid())
+  status       RecordStatus @default(ACTIVE)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  merchant     Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId   String
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storeId      String?
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  roleId       String
+  createdSales Sale[]       @relation("SaleCreatorMembership")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, merchantId, storeId, roleId])
+  @@index([userId, status])
+  @@index([merchantId, storeId, status])
+  @@index([roleId])
+}
+
+model Product {
+  id          String           @id @default(uuid())
+  sku         String
+  name        String
+  description String?
+  price       Decimal          @db.Decimal(12, 2)
+  status      RecordStatus     @default(ACTIVE)
+  merchant    Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId  String
+  inventory   StoreInventory[]
+  saleItems   SaleItem[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([merchantId, sku])
+  @@index([merchantId, status])
+}
+
+model StoreInventory {
+  id         String   @id @default(uuid())
+  quantity   Int      @default(0)
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId String
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storeId    String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([storeId, productId])
+  @@index([merchantId, storeId])
+  @@index([productId])
+}
+
+model Sale {
+  id                  String           @id @default(uuid())
+  total               Decimal          @db.Decimal(12, 2)
+  status              SaleStatus       @default(PENDING)
+  merchant            Merchant         @relation(fields: [merchantId], references: [id], onDelete: Restrict)
+  merchantId          String
+  store               Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  storeId             String
+  createdBy           User             @relation("SaleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  createdById         String
+  creatorMembership   UserMembership   @relation("SaleCreatorMembership", fields: [creatorMembershipId], references: [id], onDelete: Restrict)
+  creatorMembershipId String
+  items               SaleItem[]
+  payment             Payment?
+  idempotency         IdempotencyKey[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([merchantId, storeId, createdAt])
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+}
+
+model SaleItem {
+  id         String   @id @default(uuid())
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(12, 2)
+  subtotal   Decimal  @db.Decimal(12, 2)
+  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId     String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId  String
+  createdAt  DateTime @default(now())
+
+  @@index([saleId])
+  @@index([productId])
+  @@index([merchantId])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  amount        Decimal       @db.Decimal(12, 2)
+  method        PaymentMethod
+  status        PaymentStatus
+  provider      String
+  transactionId String
+  message       String
+  sale          Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId        String        @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model IdempotencyKey {
+  id          String            @id @default(uuid())
+  key         String
+  requestHash String
+  status      IdempotencyStatus @default(PROCESSING)
+  response    Json?
+  merchant    Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId  String
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storeId     String
+  sale        Sale?             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  saleId      String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([merchantId, storeId, key])
+  @@index([status, updatedAt])
+  @@index([saleId])
+}
